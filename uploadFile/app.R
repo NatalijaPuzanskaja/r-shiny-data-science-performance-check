@@ -20,6 +20,9 @@ ui <- function(){
                 accept=c('text/csv', 
                          'text/comma-separated-values,text/plain', 
                          '.csv')),
+      helpText("Note: data files for upload must comply to required format"),
+      helpText("The first column must be a client identification number"),
+      helpText("The third column - probability of default (value between 0 and 1)"),
       tags$hr(),
       checkboxInput('header', 'Header', TRUE),
       radioButtons('sep', 'Separator',
@@ -37,14 +40,21 @@ ui <- function(){
       tabsetPanel(
         tabPanel("Performance",
           h4("Current model performance"),
-          verbatimTextOutput("auc"),
+          plotOutput("auc"),
       
           h4("User's best performance"),
           verbatimTextOutput("performanceBest"),      
       
           h4("Top 3 performances"),
           verbatimTextOutput("performanceTop3")),
-      tabPanel("About", verbatimTextOutput("AUC calculation methodology"))
+        tabPanel("About",
+          h4("AUC calculation"),
+          code("library(pROC)"),br(),
+          code("roc(...)"),br(),
+          code("plot.roc(...)"),br(),
+
+          h4("R shiny app"),
+          p("GitHub: https://github.com/NatalijaPuzanskaja/r-shiny-data-science-performance-check"))
       )
     )
   )
@@ -60,12 +70,15 @@ server = (function(input, output) {
                           host=options()$mysql$host, 
                           user=options()$mysql$user, 
                           password=options()$mysql$password)
-  
   ## READ DATA ---------------
   users <- dbReadTable(conn=connection, name='users')
+  realData <- dbReadTable(conn=connection, name='businesses')
+  
+  ## FORMAT DATA ---------------
+  users$FullName <- paste(users$Name, users$Surname, sep=' ')
   
   ## EXPOSE AUC ---------------
-  output$auc <- renderPrint({
+  output$auc <- renderPlot({
     ## READ USER INPUT ---------------
     inFile <- input$file1
     inToken <- input$token
@@ -77,27 +90,19 @@ server = (function(input, output) {
     ## CALCULATE AUC ---------------
     estimData <- read.csv(inFile$datapath, header=input$header, 
                           sep=input$sep, quote=input$quote)
-    names(estimData)[names(estimData) != 'id'] <- 'estim'
+    names(estimData) <- c('Clientid','Estimate')
     
-    #realData <- dbReadTable(conn=connection, name='businesses')
-    realData <- data.frame(id=c(1,2,3,4),
-                           default=c(0,1,0,0))
-    names(realData)[names(realData) != 'id'] <- 'real'
+    data <- merge(estimData, realData, by='Clientid', all.x=TRUE)
     
-    data <- merge(estimData, realData, by='id', all.x=TRUE)
-    
-    #roc_obj <- roc(realData$default, estimData$default)
-    roc_obj <- roc(data$real, data$estim)
+    roc_obj <- roc(data$Default, data$Estimate)
     auc <- auc(roc_obj)
     row <- data.frame(Score = unname(auc), 
-                      UserId = 'test-test',
-                      Date = Sys.time())
-    #dbWriteTable(connection, value=row, name="results", append=TRUE, row.names=FALSE) 
-    auc
+                      UserId = inToken,
+                      Date = Sys.Date())
+    dbWriteTable(connection, value=row, name="results", append=TRUE, row.names=FALSE)
+    dbDisconnect(connection)
+    plot(roc_obj, print.auc=TRUE)
   })
-
-  ## READ DATA ---------------
-  performance <- dbReadTable(conn=connection, name='results')
   
   ## EXPOSE BEST USER'S PERFORMANCE ---------------
   output$performanceBest <- renderPrint({
@@ -108,9 +113,20 @@ server = (function(input, output) {
     if (is.null(inFile) | is.null(inToken))
       return(NULL)
     
+    ## READ DATA ---------------
+    connection <- dbConnect(MySQL(), 
+                            dbname=options()$mysql$dbname, 
+                            host=options()$mysql$host, 
+                            user=options()$mysql$user, 
+                            password=options()$mysql$password)
+    performance <- dbReadTable(conn=connection, name='results')
+    dbDisconnect(connection)
+    
     performanceRelevant <- performance[performance$UserId == inToken,]
-    performanceBest <- head(sort(performanceRelevant$Score, decreasing=TRUE), n=1)
-    performanceBest
+    performanceBest <- head(performanceRelevant[order(-performanceRelevant$Score),], n=1)
+    performanceBest <- merge(performanceBest, users, by.x='UserId', by.y='Token', all.x=TRUE)
+    rownames(performanceBest) <- NULL
+    performanceBest[, c('FullName','Score','Date')]
   })  
     
   ## EXPOSE TOP 3 USERS PERFORMANCE ---------------
@@ -122,13 +138,21 @@ server = (function(input, output) {
     if (is.null(inFile) | is.null(inToken))
       return(NULL)
     
-    performance <- dbReadTable(conn = mydb, name = 'results')
+    connection <- dbConnect(MySQL(), 
+                            dbname=options()$mysql$dbname, 
+                            host=options()$mysql$host, 
+                            user=options()$mysql$user, 
+                            password=options()$mysql$password)
+    performance <- dbReadTable(conn=connection, name='results')
+    dbDisconnect(connection)
+    
     performanceTop3 <- head(performance[order(-performance$Score),], n=3)
+    performanceTop3 <- merge(performanceTop3, users, by.x='UserId', by.y='Token', all.x=TRUE)
     rownames(performanceTop3) <- NULL
-    performanceTop3[, c('UserId','Score')]
+    performanceTop3[, c('FullName','Score','Date')]
   })
   
-  dbDisconnect(connection)
+  
 })
 
 runApp(list(ui = ui, server = server))

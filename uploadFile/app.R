@@ -2,27 +2,40 @@
 ## LIBRARY ---------------
 ##
 library(shiny)
+library(shinythemes)
 library(RMySQL)
 library(pROC)
 
 source('config.ini')
+
+options(shiny.sanitize.errors = TRUE)
 
 ##
 ## UI ---------------
 ##
 ui <- function(){
   fluidPage(
-  titlePanel("Uploading Files"),
+  column(width = 12,
+         h1("Danske Bank Data Science Challenge'17"),
+         HTML(
+           "<div class='alert alert-info'>",
+           "<strong>Heads up!</strong> This is a <em>precheck</em> app using R/Shiny and connection to remote MySQL database. <br/>",
+           "<a href='https://github.com/NatalijaPuzanskaja/r-shiny-data-science-performance-check' class='alert-link'>The code is free and open source on Github.</a>",
+           "</div>"
+         )
+  ),
+  titlePanel("Model Performance Check"),
   sidebarLayout(
     sidebarPanel(
       textInput("token", "Token"),
+      tags$hr(),
       fileInput('file1', 'Choose CSV File',
                 accept=c('text/csv', 
                          'text/comma-separated-values,text/plain', 
                          '.csv')),
       helpText("Note: data files for upload must comply to required format"),
       helpText("The first column must be a client identification number"),
-      helpText("The third column - probability of default (value between 0 and 1)"),
+      helpText("The second column - probability of default"),
       tags$hr(),
       checkboxInput('header', 'Header', TRUE),
       radioButtons('sep', 'Separator',
@@ -51,10 +64,8 @@ ui <- function(){
           h4("AUC calculation"),
           code("library(pROC)"),br(),
           code("roc(...)"),br(),
-          code("plot.roc(...)"),br(),
-
-          h4("R shiny app"),
-          p("GitHub: https://github.com/NatalijaPuzanskaja/r-shiny-data-science-performance-check"))
+          code("plot.roc(...)"),br()
+          )
       )
     )
   )
@@ -82,9 +93,10 @@ server = (function(input, output) {
     ## READ USER INPUT ---------------
     inFile <- input$file1
     inToken <- input$token
+    checkToken <- inToken %in% users$Token
     
     ## CHECK TO PROCEED ---------------
-    if (is.null(inFile) | is.null(inToken))
+    if (is.null(inFile) | checkToken == FALSE)
       return(NULL)
     
     ## CALCULATE AUC ---------------
@@ -93,6 +105,7 @@ server = (function(input, output) {
     names(estimData) <- c('Clientid','Estimate')
     
     data <- merge(estimData, realData, by='Clientid', all.x=TRUE)
+    data <- data[is.na(data$Default) == FALSE,]
     
     roc_obj <- roc(data$Default, data$Estimate)
     auc <- auc(roc_obj)
@@ -109,8 +122,9 @@ server = (function(input, output) {
     ## READ USER INPUT ---------------
     inFile <- input$file1
     inToken <- input$token
+    checkToken <- inToken %in% users$Token
     
-    if (is.null(inFile) | is.null(inToken))
+    if (is.null(inFile) | checkToken == FALSE)
       return(NULL)
     
     ## READ DATA ---------------
@@ -134,8 +148,9 @@ server = (function(input, output) {
     ## READ USER INPUT ---------------
     inFile <- input$file1
     inToken <- input$token
+    checkToken <- inToken %in% users$Token
     
-    if (is.null(inFile) | is.null(inToken))
+    if (is.null(inFile) | checkToken == FALSE)
       return(NULL)
     
     connection <- dbConnect(MySQL(), 
@@ -155,4 +170,5 @@ server = (function(input, output) {
   
 })
 
-runApp(list(ui = ui, server = server))
+shinyApp(ui = ui, server = server)
+#runApp(list(ui = ui, server = server))

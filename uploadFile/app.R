@@ -161,8 +161,9 @@ server = (function(input, output) {
     performance <- dbReadTable(conn=connection, name='results')
     dbDisconnect(connection)
     
-    performanceTop3 <- head(performance[order(-performance$Score),], n=3)
-    performanceTop3 <- merge(performanceTop3, users, by.x='UserId', by.y='Token', all.x=TRUE)
+    performance <- merge(performance, users, by.x='UserId', by.y='Token', all.x=TRUE)
+    performanceMax <- performance[which(abs(performance$Score) == ave(performance$Score, performance$UserId, FUN=function(x) max(abs(x)))), ]
+    performanceTop3 <- head(performanceMax[order(-performanceMax$Score),], n=3)
     rownames(performanceTop3) <- NULL
     performanceTop3[, c('FullName','Score','Date')]
   })

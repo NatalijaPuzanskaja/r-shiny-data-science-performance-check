@@ -163,6 +163,7 @@ server = (function(input, output) {
     
     performance <- merge(performance, users, by.x='UserId', by.y='Token', all.x=TRUE)
     performanceMax <- performance[which(abs(performance$Score) == ave(performance$Score, performance$UserId, FUN=function(x) max(abs(x)))), ]
+    performanceMax <- performanceMax[!duplicated(performanceMax$UserId),]
     performanceTop3 <- head(performanceMax[order(-performanceMax$Score),], n=3)
     rownames(performanceTop3) <- NULL
     performanceTop3[, c('FullName','Score','Date')]

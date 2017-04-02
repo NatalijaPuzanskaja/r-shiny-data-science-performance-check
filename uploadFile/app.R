@@ -5,6 +5,7 @@ library(shiny)
 library(shinythemes)
 library(RMySQL)
 library(pROC)
+library(dplyr)
 
 source('config.ini')
 
@@ -162,6 +163,7 @@ server = (function(input, output) {
     dbDisconnect(connection)
     
     performance <- merge(performance, users, by.x='UserId', by.y='Token', all.x=TRUE)
+    performance <- performance %>% filter(Date >= as.Date("2017-03-31"))
     performanceMax <- performance[which(abs(performance$Score) == ave(performance$Score, performance$UserId, FUN=function(x) max(abs(x)))), ]
     performanceMax <- performanceMax[!duplicated(performanceMax$UserId),]
     performanceTop3 <- head(performanceMax[order(-performanceMax$Score),], n=3)

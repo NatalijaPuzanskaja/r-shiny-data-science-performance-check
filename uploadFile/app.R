@@ -138,6 +138,7 @@ server = (function(input, output) {
     dbDisconnect(connection)
     
     performanceRelevant <- performance[performance$UserId == inToken,]
+    performanceRelevant <- performanceRelevant %>% filter(Date >= as.Date("2017-03-31"))
     performanceBest <- head(performanceRelevant[order(-performanceRelevant$Score),], n=1)
     performanceBest <- merge(performanceBest, users, by.x='UserId', by.y='Token', all.x=TRUE)
     rownames(performanceBest) <- NULL
